@@ -1,0 +1,103 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Get a free hosted Postgres database in seconds: `npx create-db`
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+
+enum TenantRole {
+  SUPER_ADMIN
+  OWNER
+  EDITOR
+  VIEWER
+}
+
+enum DocumentStatus {
+  DRAFT
+  PUBLISHED
+}
+
+model User {
+  id           String       @id @default(cuid())
+  name         String?
+  email        String       @unique
+  passwordHash String?
+  createdAt    DateTime     @default(now())
+  memberships  TenantUser[]
+  documents    Document[]   @relation("DocumentUpdatedBy")
+  revisions    DocumentRevision[]
+}
+
+model Tenant {
+  id           String       @id @default(cuid())
+  name         String
+  slug         String       @unique
+  logoUrl      String?
+  themeJson    Json?
+  createdAt    DateTime     @default(now())
+  members      TenantUser[]
+  documents    Document[]
+}
+
+model TenantUser {
+  id        String     @id @default(cuid())
+  tenantId  String
+  userId    String
+  role      TenantRole
+  createdAt DateTime   @default(now())
+  tenant    Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, userId])
+}
+
+model Document {
+  id           String            @id @default(cuid())
+  tenantId     String
+  parentId     String?
+  title        String
+  slug         String
+  fullPath     String
+  contentJson  Json?
+  contentHtml  String?
+  excerpt      String?
+  sortOrder    Int               @default(0)
+  status       DocumentStatus    @default(DRAFT)
+  isPublic     Boolean           @default(false)
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+  updatedById  String?
+
+  tenant       Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  parent       Document?         @relation("DocumentTree", fields: [parentId], references: [id], onDelete: SetNull)
+  children     Document[]        @relation("DocumentTree")
+  updatedBy    User?             @relation("DocumentUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
+  revisions    DocumentRevision[]
+
+  @@unique([tenantId, fullPath])
+  @@index([tenantId, parentId])
+  @@index([tenantId, status])
+}
+
+model DocumentRevision {
+  id           String    @id @default(cuid())
+  documentId   String
+  contentJson  Json?
+  contentHtml  String?
+  createdAt    DateTime  @default(now())
+  createdById  String?
+
+  document     Document  @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  createdBy    User?     @relation(fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@index([documentId, createdAt])
+}
