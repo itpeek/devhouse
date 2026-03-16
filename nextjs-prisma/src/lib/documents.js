@@ -1,3 +1,4 @@
+// src/lib/documents.js
 import { DocumentStatus } from "@prisma/client";
 import { db } from "@/lib/db";
 
@@ -52,5 +53,21 @@ export async function getTenantDocumentTree(tenantId) {
 export async function getDocumentById(documentId) {
   return db.document.findUnique({
     where: { id: documentId },
+  });
+}
+
+export async function getTenantDocuments(tenantId) {
+  return db.document.findMany({
+    where: { tenantId },
+    orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
+    select: {
+      id: true,
+      title: true,
+      slug: true,
+      fullPath: true,
+      status: true,
+      updatedAt: true,
+      createdAt: true,
+    },
   });
 }

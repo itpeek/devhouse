@@ -15,5 +15,16 @@ export default async function NewDocumentPage({ params }) {
   const role = await getUserRoleForTenant(user.id, tenantData.id);
   if (!canEdit(role)) notFound();
 
-  return <DocumentForm tenantSlug={tenant} mode="create" />;
+  return (
+    <div className="mx-auto max-w-7xl space-y-6">
+      <div className="rounded-3xl border border-slate-200 bg-gradient-to-br from-white to-slate-50 px-6 py-6 shadow-sm">
+        <h1 className="text-2xl font-semibold text-slate-900">Create document</h1>
+        <p className="mt-2 text-sm text-slate-600">
+          สร้างคู่มือใหม่สำหรับ tenant นี้ได้จากหน้าเดียว
+        </p>
+      </div>
+
+      <DocumentForm tenantSlug={tenant} mode="create" />
+    </div>
+  );
 }
