@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import LogoutButton from "./logout-button";
 
 export function DashboardSidebar({
   tenant,
@@ -13,8 +14,6 @@ export function DashboardSidebar({
 
   const navItems = [
     { href: `/dashboard/${tenant}`, label: "Overview" },
-    { href: `/dashboard/${tenant}/documents/new`, label: "New document" },
-    { href: `/${tenant}`, label: "Public docs" },
     ...(canManageMembers
       ? [{ href: `/dashboard/${tenant}/members`, label: "Members" }]
       : []),
@@ -69,7 +68,8 @@ export function DashboardSidebar({
           >
             Open public docs
           </Link>
-        </div>
+          <LogoutButton />          
+        </div>      
       </div>
     </aside>
   );

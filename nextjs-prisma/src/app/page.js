@@ -1,3 +1,4 @@
+import LogoutButton from "@/components/logout-button";
 import Link from "next/link";
 
 const demoTenants = [
@@ -45,6 +46,9 @@ export default function HomePage() {
             >
               Open docs
             </Link>
+            <div className="p-4">
+              <LogoutButton />
+            </div>              
           </div>
         </div>
       </header>

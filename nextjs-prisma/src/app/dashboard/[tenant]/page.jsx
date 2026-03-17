@@ -4,6 +4,7 @@ import { getCurrentUser, getUserRoleForTenant } from "@/lib/auth";
 import { getTenantBySlug } from "@/lib/tenant";
 import { canView, canEdit } from "@/lib/permissions";
 import { getTenantDocuments } from "@/lib/documents";
+import { redirect } from "next/navigation";
 
 function formatDate(date) {
   return new Intl.DateTimeFormat("th-TH", {
@@ -32,7 +33,7 @@ export default async function TenantDashboardPage({ params }) {
   const { tenant } = await params;
 
   const user = await getCurrentUser();
-  if (!user) notFound();
+  if (!user) redirect("/login");
 
   const tenantData = await getTenantBySlug(tenant);
   if (!tenantData) notFound();

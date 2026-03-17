@@ -1,14 +1,15 @@
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { getCurrentUser, getUserRoleForTenant } from "@/lib/auth";
 import { getTenantBySlug } from "@/lib/tenant";
 import { canView, canManageMembers } from "@/lib/permissions";
 import { DashboardSidebar } from "@/components/sidebar";
 
+
 export default async function TenantDashboardLayout({ children, params }) {
   const { tenant } = await params;
 
   const user = await getCurrentUser();
-  if (!user) notFound();
+  if (!user) redirect("/login");
 
   const tenantData = await getTenantBySlug(tenant);
   if (!tenantData) notFound();

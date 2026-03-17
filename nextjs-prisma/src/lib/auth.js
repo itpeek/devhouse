@@ -1,8 +1,17 @@
+import { cookies } from "next/headers";
 import { db } from "@/lib/db";
 
 export async function getCurrentUser() {
-  const email = "owner@devhouse.club";
-  return db.user.findUnique({ where: { email } });
+  const cookieStore = await cookies();
+  const session = cookieStore.get("devhouse_session")?.value;
+
+  if (!session) {
+    return null;
+  }
+
+  return db.user.findUnique({
+    where: { id: session },
+  });
 }
 
 export async function getUserRoleForTenant(userId, tenantId) {
