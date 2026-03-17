@@ -31,10 +31,10 @@ function SaveIndicator({ saveState, lastSavedAt }) {
     saveState === "saving"
       ? "border-amber-200 bg-amber-50 text-amber-700"
       : saveState === "dirty"
-        ? "border-slate-200 bg-slate-50 text-slate-700"
-        : saveState === "error"
-          ? "border-red-200 bg-red-50 text-red-700"
-          : "border-emerald-200 bg-emerald-50 text-emerald-700";
+      ? "border-slate-200 bg-slate-50 text-slate-700"
+      : saveState === "error"
+      ? "border-red-200 bg-red-50 text-red-700"
+      : "border-emerald-200 bg-emerald-50 text-emerald-700";
 
   return (
     <div
@@ -56,9 +56,9 @@ export function DocumentEditor({
 }) {
   const [title, setTitle] = useState(initialData?.title || "");
   const [slug, setSlug] = useState(initialData?.slug || "");
-  const [contentValue, setContentValue] = useState(
-    initialData?.contentValue || DEFAULT_DOCUMENT_CONTENT
-  );
+const [contentValue, setContentValue] = useState(
+  initialData?.contentValue || DEFAULT_DOCUMENT_CONTENT
+);
   const [status, setStatus] = useState(initialData?.status || "DRAFT");
 
   const [saving, setSaving] = useState(false);
@@ -102,65 +102,65 @@ export function DocumentEditor({
     return JSON.stringify({ title, slug, contentValue, status });
   }
 
-  async function saveDocument({ isAuto = false } = {}) {
-    if (isSavingRef.current) return;
+async function saveDocument({ isAuto = false } = {}) {
+  if (isSavingRef.current) return;
 
-    const currentSnapshot = getSnapshot();
-    if (currentSnapshot === lastSavedSnapshot) return;
+  const currentSnapshot = getSnapshot();
+  if (currentSnapshot === lastSavedSnapshot) return;
 
-    const contentHtml = serializeSlateToHtml(contentValue);
+  const contentHtml = serializeSlateToHtml(contentValue);
 
-    isSavingRef.current = true;
-    setSaving(true);
-    setError("");
-    setSaveState("saving");
+  isSavingRef.current = true;
+  setSaving(true);
+  setError("");
+  setSaveState("saving");
 
-    try {
-      const res = await fetch(endpoint, {
-        method,
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          tenantSlug,
-          title,
-          slug,
-          contentHtml,
-          contentJson: contentValue,
-          status,
-        }),
-      });
+  try {
+    const res = await fetch(endpoint, {
+      method,
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        tenantSlug,
+        title,
+        slug,
+        contentHtml,
+        contentJson: contentValue,
+        status,
+      }),
+    });
 
-      const data = await res.json().catch(() => ({}));
+    const data = await res.json().catch(() => ({}));
 
-      if (!res.ok) {
-        setError(data.error || "Save failed");
-        setSaveState("error");
-        return;
-      }
-
-      setLastSavedSnapshot(currentSnapshot);
-      setSaveState("saved");
-      setLastSavedAt(formatTime(new Date()));
-
-      if (!isAuto && mode === "create") {
-        window.location.href = `/dashboard/${tenantSlug}/documents/${data.id}/edit`;
-        return;
-      }
-
-      if (!isAuto && mode === "edit") {
-        window.history.replaceState(
-          null,
-          "",
-          `/dashboard/${tenantSlug}/documents/${documentId}/edit?saved=1`
-        );
-      }
-    } catch {
-      setError("Something went wrong while saving");
+    if (!res.ok) {
+      setError(data.error || "Save failed");
       setSaveState("error");
-    } finally {
-      setSaving(false);
-      isSavingRef.current = false;
+      return;
     }
+
+    setLastSavedSnapshot(currentSnapshot);
+    setSaveState("saved");
+    setLastSavedAt(formatTime(new Date()));
+
+    if (!isAuto && mode === "create") {
+      window.location.href = `/dashboard/${tenantSlug}/documents/${data.id}/edit`;
+      return;
+    }
+
+    if (!isAuto && mode === "edit") {
+      window.history.replaceState(
+        null,
+        "",
+        `/dashboard/${tenantSlug}/documents/${documentId}/edit?saved=1`
+      );
+    }
+  } catch {
+    setError("Something went wrong while saving");
+    setSaveState("error");
+  } finally {
+    setSaving(false);
+    isSavingRef.current = false;
   }
+}
 
   async function handleSubmit(e) {
     if (e) e.preventDefault();
@@ -293,8 +293,8 @@ export function DocumentEditor({
                 {saving
                   ? "Saving..."
                   : mode === "edit"
-                    ? "Update document"
-                    : "Save document"}
+                  ? "Update document"
+                  : "Save document"}
               </button>
 
               <SaveIndicator saveState={saveState} lastSavedAt={lastSavedAt} />
@@ -322,10 +322,11 @@ export function DocumentEditor({
                 <div className="text-xs uppercase tracking-wide text-slate-400">Status</div>
                 <div className="mt-1">
                   <span
-                    className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium ${status === "PUBLISHED"
-                      ? "bg-emerald-100 text-emerald-700"
-                      : "bg-amber-100 text-amber-700"
-                      }`}
+                    className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium ${
+                      status === "PUBLISHED"
+                        ? "bg-emerald-100 text-emerald-700"
+                        : "bg-amber-100 text-amber-700"
+                    }`}
                   >
                     {statusLabel}
                   </span>
