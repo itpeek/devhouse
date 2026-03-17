@@ -132,7 +132,7 @@ export function DocumentForm({
             </Field>
           </div>
 
-          <div className="space-y-4">
+          <div className="h-fit rounded-3xl border border-slate-200 bg-white p-4 shadow-sm lg:sticky lg:top-6">
             <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
               <div className="mb-3 text-sm font-medium text-slate-900">Publishing</div>
 
