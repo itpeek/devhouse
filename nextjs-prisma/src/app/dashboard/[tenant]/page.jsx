@@ -5,6 +5,7 @@ import { getTenantBySlug } from "@/lib/tenant";
 import { canView, canEdit } from "@/lib/permissions";
 import { getTenantDocuments } from "@/lib/documents";
 import { redirect } from "next/navigation";
+import { DeleteDocumentButton } from "./delete-document-button";
 
 function formatDate(date) {
   return new Intl.DateTimeFormat("th-TH", {
@@ -174,12 +175,15 @@ export default async function TenantDashboardPage({ params }) {
                           </Link>
 
                           {canEdit(role) ? (
-                            <Link
-                              href={`/dashboard/${tenant}/documents/${doc.id}/edit`}
-                              className="rounded-xl bg-slate-900 px-3 py-2 text-sm text-white transition hover:bg-slate-800"
-                            >
-                              Edit
-                            </Link>
+                            <>
+                              <Link
+                                href={`/dashboard/${tenant}/documents/${doc.id}/edit`}
+                                className="rounded-xl bg-slate-900 px-3 py-2 text-sm text-white transition hover:bg-slate-800"
+                              >
+                                Edit
+                              </Link>
+                              <DeleteDocumentButton documentId={doc.id} documentTitle={doc.title} />
+                            </>
                           ) : null}
                         </div>
                       </td>
