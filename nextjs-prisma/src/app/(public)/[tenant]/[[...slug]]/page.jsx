@@ -5,6 +5,7 @@ import {
 } from "@/lib/documents";
 import { getTenantBySlug } from "@/lib/tenant";
 import { DocsLayout } from "@/components/doc/doc-layouts";
+import { DocAutoRefresher } from "@/components/doc/doc-auto-refresher";
 
 function getDocPath(tenant, fullPath) {
   return `/${tenant}/${fullPath === "index" ? "" : fullPath}`;
@@ -28,6 +29,11 @@ export default async function PublicDocPage({ params }) {
       document={document}
       documentTree={documentTree}
     >
+      <DocAutoRefresher 
+        documentId={document.id} 
+        initialUpdatedAt={document.updatedAt?.toISOString() || null} 
+        intervalMs={5000} 
+      />
       <article className="overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-sm">
         <header className="border-b border-slate-200 bg-gradient-to-br from-white to-slate-50 px-6 py-8 sm:px-8 lg:px-10">
           <div className="mb-4 flex flex-wrap items-center gap-3">
