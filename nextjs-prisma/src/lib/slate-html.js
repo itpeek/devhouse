@@ -12,6 +12,14 @@ function serializeNode(node) {
       text = `<em>${text}</em>`;
     }
 
+    if (node.underline) {
+      text = `<u>${text}</u>`;
+    }
+
+    if (node.code) {
+      text = `<code>${text}</code>`;
+    }
+
     return text;
   }
 
@@ -30,6 +38,8 @@ function serializeNode(node) {
       return `<ol>${children}</ol>`;
     case "list-item":
       return `<li>${children}</li>`;
+    case "divider":
+      return `<hr />`;
     default:
       return `<p>${children}</p>`;
   }

@@ -5,13 +5,15 @@ import { getCurrentUser, getUserRoleForTenant } from "@/lib/auth";
 import { canEdit } from "@/lib/permissions";
 
 function normalizePath(value) {
-  return ((value || "")
-    .toLowerCase()
-    .trim()
-    .replace(/\s+/g, "-")
-    .replace(/[^a-z0-9-/]/g, "")
-    .replace(/\/+/g, "/")
-    .replace(/^\/|\/$/g, "")) || "index";
+  return (
+    (value || "")
+      .toLowerCase()
+      .trim()
+      .replace(/\s+/g, "-")
+      .replace(/[^a-z0-9-/]/g, "")
+      .replace(/\/+/g, "/")
+      .replace(/^\/|\/$/g, "") || "index"
+  );
 }
 
 export async function PATCH(req, context) {
@@ -68,18 +70,23 @@ export async function PATCH(req, context) {
       );
     }
 
+    const contentHtml = typeof body.contentHtml === "string" ? body.contentHtml : "";
+    const contentJson = body.contentJson ?? null;
+
     const updated = await db.document.update({
       where: { id: document.id },
       data: {
         title: String(body.title).trim(),
         slug,
         fullPath: slug,
-        contentHtml: body.contentHtml || "",
+        contentHtml,
+        contentJson,
         status: body.status === "PUBLISHED" ? "PUBLISHED" : "DRAFT",
         updatedById: user.id,
         revisions: {
           create: {
-            contentHtml: body.contentHtml || "",
+            contentHtml,
+            contentJson,
             createdById: user.id,
           },
         },

@@ -5,6 +5,7 @@ import { getTenantBySlug } from "@/lib/tenant";
 import { getDocumentById } from "@/lib/documents";
 import { canEdit } from "@/lib/permissions";
 import { DocumentEditor } from "@/app/dashboard/document-editor";
+import { DEFAULT_DOCUMENT_CONTENT } from "@/lib/document-defaults";
 
 export default async function EditDocumentPage({ params, searchParams }) {
   const { tenant, documentId } = await params;
@@ -71,7 +72,7 @@ export default async function EditDocumentPage({ params, searchParams }) {
         initialData={{
           title: document.title,
           slug: document.slug,
-          contentHtml: document.contentHtml || "",
+          contentValue: document.contentJson || DEFAULT_DOCUMENT_CONTENT,
           status: document.status,
         }}
       />

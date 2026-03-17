@@ -5,13 +5,15 @@ import { getCurrentUser, getUserRoleForTenant } from "@/lib/auth";
 import { canEdit } from "@/lib/permissions";
 
 function normalizePath(value) {
-  return ((value || "")
-    .toLowerCase()
-    .trim()
-    .replace(/\s+/g, "-")
-    .replace(/[^a-z0-9-/]/g, "")
-    .replace(/\/+/g, "/")
-    .replace(/^\/|\/$/g, "")) || "index";
+  return (
+    (value || "")
+      .toLowerCase()
+      .trim()
+      .replace(/\s+/g, "-")
+      .replace(/[^a-z0-9-/]/g, "")
+      .replace(/\/+/g, "/")
+      .replace(/^\/|\/$/g, "") || "index"
+  );
 }
 
 export async function POST(req) {
@@ -58,18 +60,24 @@ export async function POST(req) {
       );
     }
 
+    const contentHtml =
+      typeof body.contentHtml === "string" ? body.contentHtml : "";
+    const contentJson = body.contentJson ?? null;
+
     const document = await db.document.create({
       data: {
         tenantId: tenant.id,
         title: String(body.title).trim(),
         slug,
         fullPath: slug,
-        contentHtml: body.contentHtml || "",
+        contentHtml,
+        contentJson,
         status: body.status === "PUBLISHED" ? "PUBLISHED" : "DRAFT",
         updatedById: user.id,
         revisions: {
           create: {
-            contentHtml: body.contentHtml || "",
+            contentHtml,
+            contentJson,
             createdById: user.id,
           },
         },

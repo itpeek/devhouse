@@ -74,6 +74,7 @@ export default async function PublicDocPage({ params }) {
               prose-h1:text-3xl
               prose-h2:mt-10 prose-h2:border-b prose-h2:border-slate-200 prose-h2:pb-3
               prose-h3:mt-8
+              prose-hr:my-4 prose-hr:border-slate-200
               prose-p:text-slate-700 prose-p:leading-7
               prose-li:text-slate-700
               prose-a:text-slate-900 prose-a:underline prose-a:decoration-slate-300

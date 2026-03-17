@@ -45,12 +45,7 @@ function SaveIndicator({ saveState, lastSavedAt }) {
   );
 }
 
-const DEFAULT_CONTENT = [
-  {
-    type: "paragraph",
-    children: [{ text: "เริ่มเขียนคู่มือได้ที่นี่" }],
-  },
-];
+import { DEFAULT_DOCUMENT_CONTENT } from "@/lib/document-defaults";
 
 export function DocumentEditor({
   tenantSlug,
@@ -61,9 +56,9 @@ export function DocumentEditor({
 }) {
   const [title, setTitle] = useState(initialData?.title || "");
   const [slug, setSlug] = useState(initialData?.slug || "");
-  const [contentValue, setContentValue] = useState(
-    initialData?.contentValue || DEFAULT_CONTENT
-  );
+const [contentValue, setContentValue] = useState(
+  initialData?.contentValue || DEFAULT_DOCUMENT_CONTENT
+);
   const [status, setStatus] = useState(initialData?.status || "DRAFT");
 
   const [saving, setSaving] = useState(false);
@@ -78,7 +73,7 @@ export function DocumentEditor({
     JSON.stringify({
       title: initialData?.title || "",
       slug: initialData?.slug || "",
-      contentValue: initialData?.contentValue || DEFAULT_CONTENT,
+      contentValue: initialData?.contentValue || DEFAULT_DOCUMENT_CONTENT,
       status: initialData?.status || "DRAFT",
     })
   );
@@ -107,64 +102,65 @@ export function DocumentEditor({
     return JSON.stringify({ title, slug, contentValue, status });
   }
 
-  async function saveDocument({ isAuto = false } = {}) {
-    if (isSavingRef.current) return;
+async function saveDocument({ isAuto = false } = {}) {
+  if (isSavingRef.current) return;
 
-    const currentSnapshot = getSnapshot();
-    if (currentSnapshot === lastSavedSnapshot) return;
+  const currentSnapshot = getSnapshot();
+  if (currentSnapshot === lastSavedSnapshot) return;
 
-    const contentHtml = serializeSlateToHtml(contentValue);
+  const contentHtml = serializeSlateToHtml(contentValue);
 
-    isSavingRef.current = true;
-    setSaving(true);
-    setError("");
-    setSaveState("saving");
+  isSavingRef.current = true;
+  setSaving(true);
+  setError("");
+  setSaveState("saving");
 
-    try {
-      const res = await fetch(endpoint, {
-        method,
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          tenantSlug,
-          title,
-          slug,
-          contentHtml,
-          status,
-        }),
-      });
+  try {
+    const res = await fetch(endpoint, {
+      method,
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        tenantSlug,
+        title,
+        slug,
+        contentHtml,
+        contentJson: contentValue,
+        status,
+      }),
+    });
 
-      const data = await res.json().catch(() => ({}));
+    const data = await res.json().catch(() => ({}));
 
-      if (!res.ok) {
-        setError(data.error || "Save failed");
-        setSaveState("error");
-        return;
-      }
-
-      setLastSavedSnapshot(currentSnapshot);
-      setSaveState("saved");
-      setLastSavedAt(formatTime(new Date()));
-
-      if (!isAuto && mode === "create") {
-        window.location.href = `/dashboard/${tenantSlug}/documents/${data.id}/edit`;
-        return;
-      }
-
-      if (!isAuto && mode === "edit") {
-        window.history.replaceState(
-          null,
-          "",
-          `/dashboard/${tenantSlug}/documents/${documentId}/edit?saved=1`
-        );
-      }
-    } catch {
-      setError("Something went wrong while saving");
+    if (!res.ok) {
+      setError(data.error || "Save failed");
       setSaveState("error");
-    } finally {
-      setSaving(false);
-      isSavingRef.current = false;
+      return;
     }
+
+    setLastSavedSnapshot(currentSnapshot);
+    setSaveState("saved");
+    setLastSavedAt(formatTime(new Date()));
+
+    if (!isAuto && mode === "create") {
+      window.location.href = `/dashboard/${tenantSlug}/documents/${data.id}/edit`;
+      return;
+    }
+
+    if (!isAuto && mode === "edit") {
+      window.history.replaceState(
+        null,
+        "",
+        `/dashboard/${tenantSlug}/documents/${documentId}/edit?saved=1`
+      );
+    }
+  } catch {
+    setError("Something went wrong while saving");
+    setSaveState("error");
+  } finally {
+    setSaving(false);
+    isSavingRef.current = false;
   }
+}
 
   async function handleSubmit(e) {
     if (e) e.preventDefault();
