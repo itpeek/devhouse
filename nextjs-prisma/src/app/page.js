@@ -45,10 +45,7 @@ export default function HomePage() {
               className="rounded-2xl bg-slate-900 px-4 py-2 text-sm text-white transition hover:bg-slate-800"
             >
               Open docs
-            </Link>
-            <div className="p-4">
-              <LogoutButton />
-            </div>              
+            </Link>          
           </div>
         </div>
       </header>
