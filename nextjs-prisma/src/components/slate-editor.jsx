@@ -2,7 +2,7 @@
 
 import { useCallback, useMemo, useState } from "react";
 import { createEditor, Editor, Transforms, Element as SlateElement } from "slate";
-import { Slate, Editable, withReact } from "slate-react";
+import { Slate, Editable, withReact, ReactEditor } from "slate-react";
 
 const DEFAULT_VALUE = [
   {
@@ -10,6 +10,16 @@ const DEFAULT_VALUE = [
     children: [{ text: "" }],
   },
 ];
+
+function withImages(editor) {
+  const { isVoid } = editor;
+
+  editor.isVoid = (element) => {
+    return element.type === "image" ? true : isVoid(element);
+  };
+
+  return editor;
+}
 
 function isMarkActive(editor, format) {
   const marks = Editor.marks(editor);
@@ -96,6 +106,52 @@ function insertDivider(editor) {
     type: "paragraph",
     children: [{ text: "" }],
   });
+}
+
+function insertImage(editor, src, alt = "") {
+  const image = {
+    type: "image",
+    src,
+    alt,
+    children: [{ text: "" }],
+  };
+
+  Transforms.insertNodes(editor, image);
+  Transforms.insertNodes(editor, {
+    type: "paragraph",
+    children: [{ text: "" }],
+  });
+}
+
+function readFileAsDataURL(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = reject;
+
+    reader.readAsDataURL(file);
+  });
+}
+
+async function insertImagesFromFiles(editor, files, event) {
+  const imageFiles = Array.from(files || []).filter((file) =>
+    file.type.startsWith("image/")
+  );
+
+  if (!imageFiles.length) return false;
+
+  if (event) {
+    const range = ReactEditor.findEventRange(editor, event);
+    Transforms.select(editor, range);
+  }
+
+  for (const file of imageFiles) {
+    const src = await readFileAsDataURL(file);
+    insertImage(editor, src, file.name || "image");
+  }
+
+  return true;
 }
 
 function ToolbarButton({ type = "button", active = false, onClick, children }) {
@@ -187,6 +243,20 @@ function Element({ attributes, children, element }) {
         </div>
       );
 
+    case "image":
+      return (
+        <div {...attributes} className="my-4">
+          <div contentEditable={false}>
+            <img
+              src={element.src}
+              alt={element.alt || ""}
+              className="max-h-[520px] max-w-full rounded-xl border border-slate-200"
+            />
+          </div>
+          {children}
+        </div>
+      );
+
     default:
       return (
         <p {...attributes} className="mb-3 leading-7 text-slate-700">
@@ -197,7 +267,7 @@ function Element({ attributes, children, element }) {
 }
 
 export default function SlateEditor({ value, onChange, stickyTop = "top-4" }) {
-  const editor = useMemo(() => withReact(createEditor()), []);
+  const editor = useMemo(() => withImages(withReact(createEditor())), []);
   const [internalValue, setInternalValue] = useState(
     value?.length ? value : DEFAULT_VALUE
   );
@@ -207,7 +277,9 @@ export default function SlateEditor({ value, onChange, stickyTop = "top-4" }) {
 
   return (
     <div className="rounded-2xl border border-slate-300 bg-white">
-      <div className={`sticky ${stickyTop} z-20 border-b border-slate-200 bg-white/95 px-3 py-3 backdrop-blur`}>
+      <div
+        className={`sticky ${stickyTop} z-20 border-b border-slate-200 bg-white/95 px-3 py-3 backdrop-blur`}
+      >
         <div className="flex flex-wrap gap-2">
           <ToolbarButton
             active={isBlockActive(editor, "paragraph")}
@@ -304,32 +376,46 @@ export default function SlateEditor({ value, onChange, stickyTop = "top-4" }) {
             onChange(nextValue);
           }}
         >
-          <Editable
-            renderElement={renderElement}
-            renderLeaf={renderLeaf}
-            placeholder="เริ่มเขียนเนื้อหาที่นี่..."
-            className="min-h-[360px] max-w-none outline-none"
-            onKeyDown={(event) => {
-              if (!(event.metaKey || event.ctrlKey)) return;
+        <Editable
+          renderElement={renderElement}
+          renderLeaf={renderLeaf}
+          placeholder="เริ่มเขียนเนื้อหาที่นี่..."
+          className="min-h-[360px] max-w-none outline-none"
+          onDragOver={(event) => {
+            const hasFiles = Array.from(event.dataTransfer?.types || []).includes("Files");
+            if (hasFiles) {
+              event.preventDefault();
+            }
+          }}
+          onDrop={async (event) => {
+            const hasFiles = event.dataTransfer?.files?.length > 0;
 
-              switch (event.key.toLowerCase()) {
-                case "b":
-                  event.preventDefault();
-                  toggleMark(editor, "bold");
-                  break;
-                case "i":
-                  event.preventDefault();
-                  toggleMark(editor, "italic");
-                  break;
-                case "u":
-                  event.preventDefault();
-                  toggleMark(editor, "underline");
-                  break;
-                default:
-                  break;
+            if (hasFiles) {
+              event.preventDefault();
+              event.stopPropagation();
+
+              const inserted = await insertImagesFromFiles(
+                editor,
+                event.dataTransfer.files,
+                event
+              );
+
+              if (!inserted) {
+                return;
               }
-            }}
-          />
+            }
+          }}
+          onPaste={async (event) => {
+            const inserted = await insertImagesFromFiles(
+              editor,
+              event.clipboardData?.files
+            );
+
+            if (inserted) {
+              event.preventDefault();
+            }
+          }}
+        />
         </Slate>
       </div>
     </div>

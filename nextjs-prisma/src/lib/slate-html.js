@@ -40,6 +40,11 @@ function serializeNode(node) {
       return `<li>${children}</li>`;
     case "divider":
       return `<hr />`;
+    case "image": {
+      const src = escapeHtml(node.src || "");
+      const alt = escapeHtml(node.alt || "");
+      return `<p><img src="${src}" alt="${alt}" /></p>`;
+    }
     default:
       return `<p>${children}</p>`;
   }
