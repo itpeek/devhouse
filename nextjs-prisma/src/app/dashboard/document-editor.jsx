@@ -273,7 +273,6 @@ export function DocumentEditor({
 
             <Field
               label="Content Editor"
-              hint="ใช้ Slate editor แทน textarea"
             >
               <SlateEditor value={contentValue} onChange={setContentValue} />
             </Field>
@@ -302,7 +301,7 @@ export function DocumentEditor({
           </div>
         </div>
 
-        <aside className="space-y-4">
+        <aside className="h-fit space-y-4 lg:sticky lg:top-6">
           <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
             <div className="mb-4 text-sm font-semibold text-slate-900">Document info</div>
             <div className="space-y-3 text-sm text-slate-600">

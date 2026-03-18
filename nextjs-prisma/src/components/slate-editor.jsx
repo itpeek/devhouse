@@ -2,7 +2,8 @@
 
 import { useCallback, useMemo, useState } from "react";
 import { createEditor, Editor, Transforms, Element as SlateElement } from "slate";
-import { Slate, Editable, withReact, ReactEditor } from "slate-react";
+import { Slate, Editable, withReact, ReactEditor, useSlateStatic } from "slate-react";
+import { withHistory, HistoryEditor } from "slate-history";
 
 const DEFAULT_VALUE = [
   {
@@ -154,19 +155,27 @@ async function insertImagesFromFiles(editor, files, event) {
   return true;
 }
 
-function ToolbarButton({ type = "button", active = false, onClick, children }) {
+function ToolbarButton({
+  type = "button",
+  active = false,
+  disabled = false,
+  onClick,
+  children,
+}) {
   return (
     <button
       type={type}
+      disabled={disabled}
       onMouseDown={(e) => {
         e.preventDefault();
-        onClick();
+        if (!disabled) onClick();
       }}
-      className={`rounded-lg px-3 py-1.5 text-sm transition ${
-        active
-          ? "bg-slate-900 text-white"
-          : "bg-slate-100 text-slate-700 hover:bg-slate-200"
-      }`}
+      className={`rounded-lg px-3 py-1.5 text-sm transition ${disabled
+          ? "cursor-not-allowed bg-slate-100 text-slate-400"
+          : active
+            ? "bg-slate-900 text-white"
+            : "bg-slate-100 text-slate-700 hover:bg-slate-200"
+        }`}
     >
       {children}
     </button>
@@ -175,6 +184,14 @@ function ToolbarButton({ type = "button", active = false, onClick, children }) {
 
 function ToolbarDivider() {
   return <div className="mx-1 h-8 w-px bg-slate-200" />;
+}
+
+function canUndo(editor) {
+  return (editor.history?.undos?.length ?? 0) > 0;
+}
+
+function canRedo(editor) {
+  return (editor.history?.redos?.length ?? 0) > 0;
 }
 
 function Leaf({ attributes, children, leaf }) {
@@ -190,6 +207,40 @@ function Leaf({ attributes, children, leaf }) {
   }
 
   return <span {...attributes}>{children}</span>;
+}
+
+function ImageElement({ attributes, children, element }) {
+  const editor = useSlateStatic();
+
+  const removeImage = () => {
+    const path = ReactEditor.findPath(editor, element);
+    Transforms.removeNodes(editor, { at: path });
+  };
+
+  return (
+    <div {...attributes} className="group relative my-4">
+      <div contentEditable={false} className="relative inline-block max-w-full">
+        <img
+          src={element.src}
+          alt={element.alt || ""}
+          className="max-h-[520px] max-w-full rounded-xl border border-slate-200"
+        />
+
+        <button
+          type="button"
+          onMouseDown={(event) => {
+            event.preventDefault();
+            removeImage();
+          }}
+          className="absolute right-2 top-2 rounded-lg bg-black/70 px-2 py-1 text-xs font-medium text-white"
+          aria-label="Remove image"
+        >
+          ลบ
+        </button>
+      </div>
+      {children}
+    </div>
+  );
 }
 
 function Element({ attributes, children, element }) {
@@ -244,18 +295,7 @@ function Element({ attributes, children, element }) {
       );
 
     case "image":
-      return (
-        <div {...attributes} className="my-4">
-          <div contentEditable={false}>
-            <img
-              src={element.src}
-              alt={element.alt || ""}
-              className="max-h-[520px] max-w-full rounded-xl border border-slate-200"
-            />
-          </div>
-          {children}
-        </div>
-      );
+      return <ImageElement attributes={attributes} element={element}>{children}</ImageElement>;
 
     default:
       return (
@@ -266,8 +306,11 @@ function Element({ attributes, children, element }) {
   }
 }
 
-export default function SlateEditor({ value, onChange, stickyTop = "top-4" }) {
-  const editor = useMemo(() => withImages(withReact(createEditor())), []);
+export default function SlateEditor({ value, onChange, stickyTop = "top-26" }) {
+  const editor = useMemo(
+    () => withHistory(withImages(withReact(createEditor()))),
+    []
+  );
   const [internalValue, setInternalValue] = useState(
     value?.length ? value : DEFAULT_VALUE
   );
@@ -281,6 +324,35 @@ export default function SlateEditor({ value, onChange, stickyTop = "top-4" }) {
         className={`sticky ${stickyTop} z-20 border-b border-slate-200 bg-white/95 px-3 py-3 backdrop-blur`}
       >
         <div className="flex flex-wrap gap-2">
+          <ToolbarButton
+            disabled={!canUndo(editor)}
+            onClick={() => HistoryEditor.undo(editor)}
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              viewBox="0 0 640 640"
+              className="h-4 w-4"
+              fill="currentColor"
+            >
+              <path d="M88 256L232 256C241.7 256 250.5 250.2 254.2 241.2C257.9 232.2 255.9 221.9 249 215L202.3 168.3C277.6 109.7 386.6 115 455.8 184.2C530.8 259.2 530.8 380.7 455.8 455.7C380.8 530.7 259.3 530.7 184.3 455.7C174.1 445.5 165.3 434.4 157.9 422.7C148.4 407.8 128.6 403.4 113.7 412.9C98.8 422.4 94.4 442.2 103.9 457.1C113.7 472.7 125.4 487.5 139 501C239 601 401 601 501 501C601 401 601 239 501 139C406.8 44.7 257.3 39.3 156.7 122.8L105 71C98.1 64.2 87.8 62.1 78.8 65.8C69.8 69.5 64 78.3 64 88L64 232C64 245.3 74.7 256 88 256z" />
+            </svg>
+          </ToolbarButton>
+
+          <ToolbarButton
+            disabled={!canRedo(editor)}
+            onClick={() => HistoryEditor.redo(editor)}
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              viewBox="0 0 640 640"
+              className="h-4 w-4"
+              fill="currentColor"
+            >
+              <path d="M552 256L408 256C398.3 256 389.5 250.2 385.8 241.2C382.1 232.2 384.1 221.9 391 215L437.7 168.3C362.4 109.7 253.4 115 184.2 184.2C109.2 259.2 109.2 380.7 184.2 455.7C259.2 530.7 380.7 530.7 455.7 455.7C463.9 447.5 471.2 438.8 477.6 429.6C487.7 415.1 507.7 411.6 522.2 421.7C536.7 431.8 540.2 451.8 530.1 466.3C521.6 478.5 511.9 490.1 501 501C401 601 238.9 601 139 501C39.1 401 39 239 139 139C233.3 44.7 382.7 39.4 483.3 122.8L535 71C541.9 64.1 552.2 62.1 561.2 65.8C570.2 69.5 576 78.3 576 88L576 232C576 245.3 565.3 256 552 256z" />
+            </svg>
+          </ToolbarButton>
+
+          <ToolbarDivider />
           <ToolbarButton
             active={isBlockActive(editor, "paragraph")}
             onClick={() => toggleBlock(editor, "paragraph")}
@@ -376,46 +448,80 @@ export default function SlateEditor({ value, onChange, stickyTop = "top-4" }) {
             onChange(nextValue);
           }}
         >
-        <Editable
-          renderElement={renderElement}
-          renderLeaf={renderLeaf}
-          placeholder="เริ่มเขียนเนื้อหาที่นี่..."
-          className="min-h-[360px] max-w-none outline-none"
-          onDragOver={(event) => {
-            const hasFiles = Array.from(event.dataTransfer?.types || []).includes("Files");
-            if (hasFiles) {
-              event.preventDefault();
-            }
-          }}
-          onDrop={async (event) => {
-            const hasFiles = event.dataTransfer?.files?.length > 0;
+          <Editable
+            renderElement={renderElement}
+            renderLeaf={renderLeaf}
+            placeholder="เริ่มเขียนเนื้อหาที่นี่..."
+            className="min-h-[360px] max-w-none outline-none"
+            onDragOver={(event) => {
+              const hasFiles = Array.from(event.dataTransfer?.types || []).includes("Files");
+              if (hasFiles) {
+                event.preventDefault();
+              }
+            }}
+            onDrop={async (event) => {
+              const hasFiles = event.dataTransfer?.files?.length > 0;
 
-            if (hasFiles) {
-              event.preventDefault();
-              event.stopPropagation();
+              if (hasFiles) {
+                event.preventDefault();
+                event.stopPropagation();
 
+                const inserted = await insertImagesFromFiles(
+                  editor,
+                  event.dataTransfer.files,
+                  event
+                );
+
+                if (!inserted) {
+                  return;
+                }
+              }
+            }}
+            onPaste={async (event) => {
               const inserted = await insertImagesFromFiles(
                 editor,
-                event.dataTransfer.files,
-                event
+                event.clipboardData?.files
               );
 
-              if (!inserted) {
+              if (inserted) {
+                event.preventDefault();
+              }
+            }}
+            onKeyDown={(event) => {
+              if (!(event.metaKey || event.ctrlKey)) return;
+
+              const key = event.key.toLowerCase();
+
+              if (key === "z" && !event.shiftKey) {
+                event.preventDefault();
+                HistoryEditor.undo(editor);
                 return;
               }
-            }
-          }}
-          onPaste={async (event) => {
-            const inserted = await insertImagesFromFiles(
-              editor,
-              event.clipboardData?.files
-            );
 
-            if (inserted) {
-              event.preventDefault();
-            }
-          }}
-        />
+              if ((key === "z" && event.shiftKey) || key === "y") {
+                event.preventDefault();
+                HistoryEditor.redo(editor);
+                return;
+              }
+
+              switch (key) {
+                case "b":
+                  event.preventDefault();
+                  toggleMark(editor, "bold");
+                  break;
+                case "i":
+                  event.preventDefault();
+                  toggleMark(editor, "italic");
+                  break;
+                case "u":
+                  event.preventDefault();
+                  toggleMark(editor, "underline");
+                  break;
+                default:
+                  break;
+              }
+            }}
+          />
         </Slate>
       </div>
     </div>
