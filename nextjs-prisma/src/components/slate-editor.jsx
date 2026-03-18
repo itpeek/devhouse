@@ -1,8 +1,20 @@
 "use client";
 
 import { useCallback, useMemo, useState } from "react";
-import { createEditor, Editor, Transforms, Element as SlateElement } from "slate";
-import { Slate, Editable, withReact, ReactEditor, useSlateStatic } from "slate-react";
+import {
+  createEditor,
+  Editor,
+  Transforms,
+  Element as SlateElement,
+  Range,
+} from "slate";
+import {
+  Slate,
+  Editable,
+  withReact,
+  ReactEditor,
+  useSlateStatic,
+} from "slate-react";
 import { withHistory, HistoryEditor } from "slate-history";
 
 const DEFAULT_VALUE = [
@@ -96,6 +108,7 @@ function clearFormatting(editor) {
   Editor.removeMark(editor, "italic");
   Editor.removeMark(editor, "underline");
   Editor.removeMark(editor, "code");
+  Editor.removeMark(editor, "link");
 }
 
 function insertDivider(editor) {
@@ -111,12 +124,12 @@ function insertDivider(editor) {
   });
 }
 
-function insertImage(editor, src, alt = "", url = null) {
+function insertImage(editor, src, alt = "", link = null) {
   const image = {
     type: "image",
     src,
     alt,
-    url,
+    link,
     children: [{ text: "" }],
   };
 
@@ -172,64 +185,7 @@ async function insertImagesFromFiles(editor, files, event, setEditorError) {
 
 function isLinkMarkActive(editor) {
   const marks = Editor.marks(editor);
-  return Boolean(marks?.link);
-}
-
-function wrapLink(editor, url) {
-  if (!url) return;
-
-  const { selection } = editor;
-  if (!selection) return;
-
-  const isCollapsed = selection.anchor.offset === selection.focus.offset &&
-    selection.anchor.path.join(",") === selection.focus.path.join(",");
-
-  if (isCollapsed) {
-    Transforms.insertText(editor, url, { at: selection });
-    Transforms.select(editor, {
-      anchor: selection.anchor,
-      focus: {
-        path: selection.anchor.path,
-        offset: selection.anchor.offset + url.length,
-      },
-    });
-  }
-
-  Editor.addMark(editor, "link", url);
-}
-
-function unwrapLink(editor) {
-  Editor.removeMark(editor, "link");
-}
-
-function toggleLink(editor) {
-  const active = isLinkMarkActive(editor);
-
-  if (active) {
-    unwrapLink(editor);
-    return;
-  }
-
-  const url = window.prompt("วางลิงก์ที่ต้องการ");
-  if (!url) return;
-
-  wrapLink(editor, url.trim());
-}
-
-function setImageLink(editor, element) {
-  const currentUrl = element.url || "";
-  const nextUrl = window.prompt("ลิงก์ของรูปภาพ", currentUrl);
-
-  const path = ReactEditor.findPath(editor, element);
-
-  if (nextUrl === null) return;
-
-  if (!nextUrl.trim()) {
-    Transforms.setNodes(editor, { url: null }, { at: path });
-    return;
-  }
-
-  Transforms.setNodes(editor, { url: nextUrl.trim() }, { at: path });
+  return Boolean(marks?.link?.href);
 }
 
 function ToolbarButton({
@@ -283,12 +239,12 @@ function Leaf({ attributes, children, leaf }) {
     );
   }
 
-  if (leaf.link) {
+  if (leaf.link?.href) {
     children = (
       <a
-        href={leaf.link}
-        target="_blank"
-        rel="noopener noreferrer"
+        href={leaf.link.href}
+        target={leaf.link.target || "_self"}
+        rel={leaf.link.target === "_blank" ? "noopener noreferrer" : undefined}
         className="text-slate-900 underline decoration-slate-300 underline-offset-2"
       >
         {children}
@@ -299,7 +255,7 @@ function Leaf({ attributes, children, leaf }) {
   return <span {...attributes}>{children}</span>;
 }
 
-function ImageElement({ attributes, children, element }) {
+function ImageElement({ attributes, children, element, onEditLink }) {
   const editor = useSlateStatic();
 
   const removeImage = () => {
@@ -318,11 +274,11 @@ function ImageElement({ attributes, children, element }) {
   return (
     <div {...attributes} className="group relative my-4">
       <div contentEditable={false} className="relative inline-block max-w-full">
-        {element.url ? (
+        {element.link?.href ? (
           <a
-            href={element.url}
-            target="_blank"
-            rel="noopener noreferrer"
+            href={element.link.href}
+            target={element.link.target || "_self"}
+            rel={element.link.target === "_blank" ? "noopener noreferrer" : undefined}
             className="inline-block"
           >
             {imageNode}
@@ -336,7 +292,7 @@ function ImageElement({ attributes, children, element }) {
             type="button"
             onMouseDown={(event) => {
               event.preventDefault();
-              setImageLink(editor, element);
+              onEditLink(element);
             }}
             className="rounded-lg bg-black/70 px-2 py-1 text-xs font-medium text-white"
             aria-label="Set image link"
@@ -362,7 +318,7 @@ function ImageElement({ attributes, children, element }) {
   );
 }
 
-function Element({ attributes, children, element }) {
+function Element({ attributes, children, element, onEditImageLink }) {
   switch (element.type) {
     case "heading-one":
       return (
@@ -414,7 +370,15 @@ function Element({ attributes, children, element }) {
       );
 
     case "image":
-      return <ImageElement attributes={attributes} element={element}>{children}</ImageElement>;
+      return (
+        <ImageElement
+          attributes={attributes}
+          element={element}
+          onEditLink={onEditImageLink}
+        >
+          {children}
+        </ImageElement>
+      );
 
     default:
       return (
@@ -432,11 +396,123 @@ export default function SlateEditor({ value, onChange, stickyTop = "top-4" }) {
     () => withHistory(withImages(withReact(createEditor()))),
     []
   );
+
   const [internalValue, setInternalValue] = useState(
     value?.length ? value : DEFAULT_VALUE
   );
 
-  const renderElement = useCallback((props) => <Element {...props} />, []);
+  const [linkPanelOpen, setLinkPanelOpen] = useState(false);
+  const [linkMode, setLinkMode] = useState("text");
+  const [linkUrl, setLinkUrl] = useState("");
+  const [linkTarget, setLinkTarget] = useState("_self");
+  const [savedSelection, setSavedSelection] = useState(null);
+  const [activeImageElement, setActiveImageElement] = useState(null);
+
+  const openTextLinkPanel = useCallback(() => {
+    if (!editor.selection || Range.isCollapsed(editor.selection)) {
+      setEditorError("กรุณาคลุมข้อความก่อนใส่ลิงก์");
+      return;
+    }
+
+    setEditorError(null);
+    setSavedSelection(editor.selection);
+
+    const marks = Editor.marks(editor);
+    const currentLink = marks?.link || null;
+
+    setLinkMode("text");
+    setLinkUrl(currentLink?.href || "");
+    setLinkTarget(currentLink?.target || "_self");
+    setActiveImageElement(null);
+    setLinkPanelOpen(true);
+  }, [editor]);
+
+  const openImageLinkPanel = useCallback((element) => {
+    setEditorError(null);
+    setLinkMode("image");
+    setLinkUrl(element?.link?.href || "");
+    setLinkTarget(element?.link?.target || "_self");
+    setActiveImageElement(element);
+    setSavedSelection(null);
+    setLinkPanelOpen(true);
+  }, []);
+
+  const closeLinkPanel = useCallback(() => {
+    setLinkPanelOpen(false);
+    setLinkUrl("");
+    setLinkTarget("_self");
+    setSavedSelection(null);
+    setActiveImageElement(null);
+  }, []);
+
+  const applyLink = useCallback(() => {
+    const href = linkUrl.trim();
+
+    if (!href) {
+      setEditorError("กรุณาใส่ URL ปลายทาง");
+      return;
+    }
+
+    setEditorError(null);
+
+    if (linkMode === "text") {
+      if (!savedSelection) return;
+
+      Transforms.select(editor, savedSelection);
+      Editor.addMark(editor, "link", {
+        href,
+        target: linkTarget,
+      });
+    }
+
+    if (linkMode === "image" && activeImageElement) {
+      const path = ReactEditor.findPath(editor, activeImageElement);
+      Transforms.setNodes(
+        editor,
+        {
+          link: {
+            href,
+            target: linkTarget,
+          },
+        },
+        { at: path }
+      );
+    }
+
+    closeLinkPanel();
+  }, [
+    linkUrl,
+    linkMode,
+    savedSelection,
+    editor,
+    linkTarget,
+    activeImageElement,
+    closeLinkPanel,
+  ]);
+
+  const removeLink = useCallback(() => {
+    setEditorError(null);
+
+    if (linkMode === "text") {
+      if (savedSelection) {
+        Transforms.select(editor, savedSelection);
+      }
+      Editor.removeMark(editor, "link");
+    }
+
+    if (linkMode === "image" && activeImageElement) {
+      const path = ReactEditor.findPath(editor, activeImageElement);
+      Transforms.setNodes(editor, { link: null }, { at: path });
+    }
+
+    closeLinkPanel();
+  }, [linkMode, savedSelection, editor, activeImageElement, closeLinkPanel]);
+
+  const renderElement = useCallback(
+    (props) => <Element {...props} onEditImageLink={openImageLinkPanel} />,
+    [openImageLinkPanel]
+  );
+
   const renderLeaf = useCallback((props) => <Leaf {...props} />, []);
 
   return (
@@ -474,6 +550,7 @@ export default function SlateEditor({ value, onChange, stickyTop = "top-4" }) {
           </ToolbarButton>
 
           <ToolbarDivider />
+
           <ToolbarButton
             active={isBlockActive(editor, "paragraph")}
             onClick={() => toggleBlock(editor, "paragraph")}
@@ -554,17 +631,90 @@ export default function SlateEditor({ value, onChange, stickyTop = "top-4" }) {
 
           <ToolbarDivider />
 
-          <ToolbarButton onClick={() => clearFormatting(editor)}>
-            Clear
-          </ToolbarButton>
           <ToolbarButton
             active={isLinkMarkActive(editor)}
-            onClick={() => toggleLink(editor)}
+            onClick={openTextLinkPanel}
           >
             Link
           </ToolbarButton>
+
+          <ToolbarButton onClick={() => clearFormatting(editor)}>
+            Clear
+          </ToolbarButton>
         </div>
       </div>
+
+      {linkPanelOpen && (
+        <div className="border-b border-slate-200 bg-slate-50 px-4 py-4">
+          <div className="space-y-3">
+            <div className="grid gap-3 md:grid-cols-[140px_1fr_180px]">
+              <div>
+                <label className="mb-1 block text-xs font-medium text-slate-500">
+                  ประเภท
+                </label>
+                <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700">
+                  {linkMode === "image" ? "รูปภาพ" : "ข้อความ"}
+                </div>
+              </div>
+
+              <div className="min-w-0">
+                <label className="mb-1 block text-xs font-medium text-slate-500">
+                  URL ปลายทาง
+                </label>
+                <input
+                  type="url"
+                  value={linkUrl}
+                  onChange={(e) => setLinkUrl(e.target.value)}
+                  placeholder="https://example.com"
+                  className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-slate-500"
+                />
+              </div>
+
+              <div>
+                <label className="mb-1 block text-xs font-medium whitespace-nowrap text-slate-500">
+                  เปิดลิงก์ใน
+                </label>
+                <select
+                  value={linkTarget}
+                  onChange={(e) => setLinkTarget(e.target.value)}
+                  className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-slate-500"
+                >
+                  <option value="_self">แท็บเดิม</option>
+                  <option value="_blank">แท็บใหม่</option>
+                  <option value="_top">Top frame</option>
+                  <option value="_parent">Parent frame</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap justify-end gap-2">
+              <button
+                type="button"
+                onClick={closeLinkPanel}
+                className="rounded-lg bg-slate-100 px-3 py-2 text-sm font-medium text-slate-700"
+              >
+                ยกเลิก
+              </button>
+
+              <button
+                type="button"
+                onClick={removeLink}
+                className="rounded-lg bg-slate-100 px-3 py-2 text-sm font-medium text-slate-700"
+              >
+                ลบลิงก์
+              </button>
+
+              <button
+                type="button"
+                onClick={applyLink}
+                className="rounded-lg bg-slate-900 px-3 py-2 text-sm font-medium text-white"
+              >
+                บันทึก
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="min-h-[420px] px-4 py-4">
         {editorError && (
@@ -572,6 +722,7 @@ export default function SlateEditor({ value, onChange, stickyTop = "top-4" }) {
             {editorError}
           </div>
         )}
+
         <Slate
           editor={editor}
           initialValue={internalValue}
@@ -599,16 +750,12 @@ export default function SlateEditor({ value, onChange, stickyTop = "top-4" }) {
                 event.preventDefault();
                 event.stopPropagation();
 
-                const inserted = await insertImagesFromFiles(
+                await insertImagesFromFiles(
                   editor,
                   event.dataTransfer.files,
                   event,
                   setEditorError
                 );
-
-                if (!inserted) {
-                  return;
-                }
               }
             }}
             onPaste={async (event) => {
@@ -642,7 +789,7 @@ export default function SlateEditor({ value, onChange, stickyTop = "top-4" }) {
 
               if (key === "k") {
                 event.preventDefault();
-                toggleLink(editor);
+                openTextLinkPanel();
                 return;
               }
 
