@@ -12,6 +12,8 @@ const DEFAULT_VALUE = [
   },
 ];
 
+const MAX_IMAGE_SIZE_BYTES = 2 * 1024 * 1024;
+
 function withImages(editor) {
   const { isVoid } = editor;
 
@@ -109,11 +111,12 @@ function insertDivider(editor) {
   });
 }
 
-function insertImage(editor, src, alt = "") {
+function insertImage(editor, src, alt = "", url = null) {
   const image = {
     type: "image",
     src,
     alt,
+    url,
     children: [{ text: "" }],
   };
 
@@ -135,24 +138,98 @@ function readFileAsDataURL(file) {
   });
 }
 
-async function insertImagesFromFiles(editor, files, event) {
+async function insertImagesFromFiles(editor, files, event, setEditorError) {
   const imageFiles = Array.from(files || []).filter((file) =>
     file.type.startsWith("image/")
   );
 
   if (!imageFiles.length) return false;
 
+  setEditorError(null);
+
   if (event) {
     const range = ReactEditor.findEventRange(editor, event);
-    Transforms.select(editor, range);
+    if (range) {
+      Transforms.select(editor, range);
+    }
   }
+
+  let insertedAny = false;
 
   for (const file of imageFiles) {
+    if (file.size > MAX_IMAGE_SIZE_BYTES) {
+      setEditorError(`ไฟล์ "${file.name}" ใหญ่เกิน 2 MB`);
+      continue;
+    }
+
     const src = await readFileAsDataURL(file);
     insertImage(editor, src, file.name || "image");
+    insertedAny = true;
   }
 
-  return true;
+  return insertedAny;
+}
+
+function isLinkMarkActive(editor) {
+  const marks = Editor.marks(editor);
+  return Boolean(marks?.link);
+}
+
+function wrapLink(editor, url) {
+  if (!url) return;
+
+  const { selection } = editor;
+  if (!selection) return;
+
+  const isCollapsed = selection.anchor.offset === selection.focus.offset &&
+    selection.anchor.path.join(",") === selection.focus.path.join(",");
+
+  if (isCollapsed) {
+    Transforms.insertText(editor, url, { at: selection });
+    Transforms.select(editor, {
+      anchor: selection.anchor,
+      focus: {
+        path: selection.anchor.path,
+        offset: selection.anchor.offset + url.length,
+      },
+    });
+  }
+
+  Editor.addMark(editor, "link", url);
+}
+
+function unwrapLink(editor) {
+  Editor.removeMark(editor, "link");
+}
+
+function toggleLink(editor) {
+  const active = isLinkMarkActive(editor);
+
+  if (active) {
+    unwrapLink(editor);
+    return;
+  }
+
+  const url = window.prompt("วางลิงก์ที่ต้องการ");
+  if (!url) return;
+
+  wrapLink(editor, url.trim());
+}
+
+function setImageLink(editor, element) {
+  const currentUrl = element.url || "";
+  const nextUrl = window.prompt("ลิงก์ของรูปภาพ", currentUrl);
+
+  const path = ReactEditor.findPath(editor, element);
+
+  if (nextUrl === null) return;
+
+  if (!nextUrl.trim()) {
+    Transforms.setNodes(editor, { url: null }, { at: path });
+    return;
+  }
+
+  Transforms.setNodes(editor, { url: nextUrl.trim() }, { at: path });
 }
 
 function ToolbarButton({
@@ -171,10 +248,10 @@ function ToolbarButton({
         if (!disabled) onClick();
       }}
       className={`rounded-lg px-3 py-1.5 text-sm transition ${disabled
-          ? "cursor-not-allowed bg-slate-100 text-slate-400"
-          : active
-            ? "bg-slate-900 text-white"
-            : "bg-slate-100 text-slate-700 hover:bg-slate-200"
+        ? "cursor-not-allowed bg-slate-100 text-slate-400"
+        : active
+          ? "bg-slate-900 text-white"
+          : "bg-slate-100 text-slate-700 hover:bg-slate-200"
         }`}
     >
       {children}
@@ -206,6 +283,19 @@ function Leaf({ attributes, children, leaf }) {
     );
   }
 
+  if (leaf.link) {
+    children = (
+      <a
+        href={leaf.link}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="text-slate-900 underline decoration-slate-300 underline-offset-2"
+      >
+        {children}
+      </a>
+    );
+  }
+
   return <span {...attributes}>{children}</span>;
 }
 
@@ -217,26 +307,55 @@ function ImageElement({ attributes, children, element }) {
     Transforms.removeNodes(editor, { at: path });
   };
 
+  const imageNode = (
+    <img
+      src={element.src}
+      alt={element.alt || ""}
+      className="max-h-[520px] max-w-full rounded-xl border border-slate-200"
+    />
+  );
+
   return (
     <div {...attributes} className="group relative my-4">
       <div contentEditable={false} className="relative inline-block max-w-full">
-        <img
-          src={element.src}
-          alt={element.alt || ""}
-          className="max-h-[520px] max-w-full rounded-xl border border-slate-200"
-        />
+        {element.url ? (
+          <a
+            href={element.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-block"
+          >
+            {imageNode}
+          </a>
+        ) : (
+          imageNode
+        )}
 
-        <button
-          type="button"
-          onMouseDown={(event) => {
-            event.preventDefault();
-            removeImage();
-          }}
-          className="absolute right-2 top-2 rounded-lg bg-black/70 px-2 py-1 text-xs font-medium text-white"
-          aria-label="Remove image"
-        >
-          ลบ
-        </button>
+        <div className="absolute right-2 top-2 flex gap-2">
+          <button
+            type="button"
+            onMouseDown={(event) => {
+              event.preventDefault();
+              setImageLink(editor, element);
+            }}
+            className="rounded-lg bg-black/70 px-2 py-1 text-xs font-medium text-white"
+            aria-label="Set image link"
+          >
+            ลิงก์
+          </button>
+
+          <button
+            type="button"
+            onMouseDown={(event) => {
+              event.preventDefault();
+              removeImage();
+            }}
+            className="rounded-lg bg-black/70 px-2 py-1 text-xs font-medium text-white"
+            aria-label="Remove image"
+          >
+            ลบ
+          </button>
+        </div>
       </div>
       {children}
     </div>
@@ -306,7 +425,9 @@ function Element({ attributes, children, element }) {
   }
 }
 
-export default function SlateEditor({ value, onChange, stickyTop = "top-26" }) {
+export default function SlateEditor({ value, onChange, stickyTop = "top-4" }) {
+  const [editorError, setEditorError] = useState(null);
+
   const editor = useMemo(
     () => withHistory(withImages(withReact(createEditor()))),
     []
@@ -436,14 +557,26 @@ export default function SlateEditor({ value, onChange, stickyTop = "top-26" }) {
           <ToolbarButton onClick={() => clearFormatting(editor)}>
             Clear
           </ToolbarButton>
+          <ToolbarButton
+            active={isLinkMarkActive(editor)}
+            onClick={() => toggleLink(editor)}
+          >
+            Link
+          </ToolbarButton>
         </div>
       </div>
 
       <div className="min-h-[420px] px-4 py-4">
+        {editorError && (
+          <div className="border-b border-red-200 bg-red-50 px-4 py-2 text-sm text-red-600">
+            {editorError}
+          </div>
+        )}
         <Slate
           editor={editor}
           initialValue={internalValue}
           onValueChange={(nextValue) => {
+            setEditorError(null);
             setInternalValue(nextValue);
             onChange(nextValue);
           }}
@@ -469,7 +602,8 @@ export default function SlateEditor({ value, onChange, stickyTop = "top-26" }) {
                 const inserted = await insertImagesFromFiles(
                   editor,
                   event.dataTransfer.files,
-                  event
+                  event,
+                  setEditorError
                 );
 
                 if (!inserted) {
@@ -480,7 +614,9 @@ export default function SlateEditor({ value, onChange, stickyTop = "top-26" }) {
             onPaste={async (event) => {
               const inserted = await insertImagesFromFiles(
                 editor,
-                event.clipboardData?.files
+                event.clipboardData?.files,
+                null,
+                setEditorError
               );
 
               if (inserted) {
@@ -501,6 +637,12 @@ export default function SlateEditor({ value, onChange, stickyTop = "top-26" }) {
               if ((key === "z" && event.shiftKey) || key === "y") {
                 event.preventDefault();
                 HistoryEditor.redo(editor);
+                return;
+              }
+
+              if (key === "k") {
+                event.preventDefault();
+                toggleLink(editor);
                 return;
               }
 

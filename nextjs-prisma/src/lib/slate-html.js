@@ -20,6 +20,11 @@ function serializeNode(node) {
       text = `<code>${text}</code>`;
     }
 
+    if (node.link) {
+      const href = escapeHtml(node.link);
+      text = `<a href="${href}" target="_blank" rel="noopener noreferrer">${text}</a>`;
+    }
+
     return text;
   }
 
@@ -43,7 +48,14 @@ function serializeNode(node) {
     case "image": {
       const src = escapeHtml(node.src || "");
       const alt = escapeHtml(node.alt || "");
-      return `<p><img src="${src}" alt="${alt}" /></p>`;
+      const imageTag = `<img src="${src}" alt="${alt}" />`;
+
+      if (node.url) {
+        const href = escapeHtml(node.url);
+        return `<p><a href="${href}" target="_blank" rel="noopener noreferrer">${imageTag}</a></p>`;
+      }
+
+      return `<p>${imageTag}</p>`;
     }
     default:
       return `<p>${children}</p>`;

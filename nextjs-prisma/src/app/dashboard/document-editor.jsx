@@ -232,26 +232,6 @@ export function DocumentEditor({
           </div>
 
           <div className="space-y-6 px-6 py-6">
-            <div className="sticky top-4 z-20 mb-6 rounded-2xl border border-slate-200 bg-white/90 p-4 shadow-sm backdrop-blur">
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <div className="flex items-center gap-3">
-                  <SaveIndicator saveState={saveState} lastSavedAt={lastSavedAt} />
-                  <span className="text-sm text-slate-500">
-                    {mode === "edit" ? "Editing document" : "Creating document"}
-                  </span>
-                </div>
-
-                <div className="flex flex-wrap items-center gap-3">
-                  <button
-                    type="submit"
-                    disabled={saving}
-                    className="rounded-2xl bg-slate-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-slate-800 disabled:opacity-60"
-                  >
-                    {saving ? "Saving..." : "Save"}
-                  </button>
-                </div>
-              </div>
-            </div>
 
             <Field label="Title" hint="ชื่อเอกสารที่จะแสดงบนหน้า docs และใน sidebar">
               <input
