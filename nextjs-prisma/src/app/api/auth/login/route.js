@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 
 export async function POST(req) {
+  const baseUrl = process.env.APP_URL || req.nextUrl.origin;
+
   try {
     const contentType = req.headers.get("content-type") || "";
 
@@ -19,9 +21,7 @@ export async function POST(req) {
     }
 
     if (!email || !password) {
-      return NextResponse.redirect(
-        new URL("/login?error=missing_fields", req.nextUrl.origin)
-      );
+      return NextResponse.redirect(new URL("/login?error=missing_fields", baseUrl));
     }
 
     const user = await db.user.findUnique({
@@ -29,21 +29,14 @@ export async function POST(req) {
     });
 
     if (!user) {
-      return NextResponse.redirect(
-        new URL("/login?error=invalid_credentials", req.nextUrl.origin)
-      );
+      return NextResponse.redirect(new URL("/login?error=invalid_credentials", baseUrl));
     }
 
-    // Phase 1 mock password check
     if (password !== "devhouse123") {
-      return NextResponse.redirect(
-        new URL("/login?error=invalid_credentials", req.nextUrl.origin)
-      );
+      return NextResponse.redirect(new URL("/login?error=invalid_credentials", baseUrl));
     }
 
-    const response = NextResponse.redirect(
-      new URL("/dashboard/acme", req.nextUrl.origin)
-    );
+    const response = NextResponse.redirect(new URL("/dashboard/acme", baseUrl));
 
     response.cookies.set("devhouse_session", user.id, {
       httpOnly: true,
@@ -56,8 +49,6 @@ export async function POST(req) {
     return response;
   } catch (error) {
     console.error("Login failed:", error);
-    return NextResponse.redirect(
-      new URL("/login?error=server_error", req.nextUrl.origin)
-    );
+    return NextResponse.redirect(new URL("/login?error=server_error", baseUrl));
   }
 }
