@@ -19,7 +19,9 @@ export async function POST(req) {
     }
 
     if (!email || !password) {
-      return NextResponse.redirect(new URL("/login?error=missing_fields", req.url));
+      return NextResponse.redirect(
+        new URL("/login?error=missing_fields", req.nextUrl.origin)
+      );
     }
 
     const user = await db.user.findUnique({
@@ -27,15 +29,21 @@ export async function POST(req) {
     });
 
     if (!user) {
-      return NextResponse.redirect(new URL("/login?error=invalid_credentials", req.url));
+      return NextResponse.redirect(
+        new URL("/login?error=invalid_credentials", req.nextUrl.origin)
+      );
     }
 
     // Phase 1 mock password check
     if (password !== "devhouse123") {
-      return NextResponse.redirect(new URL("/login?error=invalid_credentials", req.url));
+      return NextResponse.redirect(
+        new URL("/login?error=invalid_credentials", req.nextUrl.origin)
+      );
     }
 
-    const response = NextResponse.redirect(new URL("/dashboard/acme", req.url));
+    const response = NextResponse.redirect(
+      new URL("/dashboard/acme", req.nextUrl.origin)
+    );
 
     response.cookies.set("devhouse_session", user.id, {
       httpOnly: true,
@@ -48,6 +56,8 @@ export async function POST(req) {
     return response;
   } catch (error) {
     console.error("Login failed:", error);
-    return NextResponse.redirect(new URL("/login?error=server_error", req.url));
+    return NextResponse.redirect(
+      new URL("/login?error=server_error", req.nextUrl.origin)
+    );
   }
 }
