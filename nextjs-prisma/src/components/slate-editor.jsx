@@ -1,12 +1,13 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   createEditor,
   Editor,
   Transforms,
   Element as SlateElement,
   Range,
+  Node,  
 } from "slate";
 import {
   Slate,
@@ -31,6 +32,40 @@ function withImages(editor) {
 
   editor.isVoid = (element) => {
     return element.type === "image" ? true : isVoid(element);
+  };
+
+  return editor;
+}
+
+function withLinks(editor) {
+  const { isInline } = editor;
+
+  editor.isInline = (element) => {
+    return element.type === "link" ? true : isInline(element);
+  };
+
+  return editor;
+}
+
+function withLayout(editor) {
+  const { normalizeNode } = editor;
+
+  editor.normalizeNode = ([node, path]) => {
+    if (!Editor.isEditor(node) && SlateElement.isElement(node)) {
+      if (node.type === "paragraph") {
+        for (const [child, childPath] of Node.children(editor, path)) {
+          if (
+            SlateElement.isElement(child) &&
+            (child.type === "image" || child.type === "divider")
+          ) {
+            Transforms.unwrapNodes(editor, { at: childPath });
+            return;
+          }
+        }
+      }
+    }
+
+    normalizeNode([node, path]);
   };
 
   return editor;
@@ -95,6 +130,50 @@ function toggleBlock(editor, format) {
   }
 }
 
+function isLinkElement(n) {
+  return !Editor.isEditor(n) && SlateElement.isElement(n) && n.type === "link";
+}
+
+function isTextLinkActive(editor) {
+  const [match] = Editor.nodes(editor, {
+    match: isLinkElement,
+  });
+
+  return !!match;
+}
+
+function unwrapLink(editor) {
+  Transforms.unwrapNodes(editor, {
+    match: isLinkElement,
+    split: true,
+  });
+}
+
+function wrapLink(editor, { href, target = "_self" }) {
+  if (!href || !editor.selection) return;
+
+  if (isTextLinkActive(editor)) {
+    unwrapLink(editor);
+  }
+
+  const { selection } = editor;
+  const isCollapsed = Range.isCollapsed(selection);
+
+  const link = {
+    type: "link",
+    href,
+    target,
+    children: isCollapsed ? [{ text: href }] : [],
+  };
+
+  if (isCollapsed) {
+    Transforms.insertNodes(editor, link);
+  } else {
+    Transforms.wrapNodes(editor, link, { split: true });
+    Transforms.collapse(editor, { edge: "end" });
+  }
+}
+
 function clearFormatting(editor) {
   Transforms.setNodes(
     editor,
@@ -104,11 +183,15 @@ function clearFormatting(editor) {
     }
   );
 
+  Transforms.unwrapNodes(editor, {
+    match: isLinkElement,
+    split: true,
+  });
+
   Editor.removeMark(editor, "bold");
   Editor.removeMark(editor, "italic");
   Editor.removeMark(editor, "underline");
   Editor.removeMark(editor, "code");
-  Editor.removeMark(editor, "link");
 }
 
 function insertDivider(editor) {
@@ -183,11 +266,6 @@ async function insertImagesFromFiles(editor, files, event, setEditorError) {
   return insertedAny;
 }
 
-function isLinkMarkActive(editor) {
-  const marks = Editor.marks(editor);
-  return Boolean(marks?.link?.href);
-}
-
 function ToolbarButton({
   type = "button",
   active = false,
@@ -203,12 +281,13 @@ function ToolbarButton({
         e.preventDefault();
         if (!disabled) onClick();
       }}
-      className={`rounded-lg px-3 py-1.5 text-sm transition ${disabled
-        ? "cursor-not-allowed bg-slate-100 text-slate-400"
-        : active
-          ? "bg-slate-900 text-white"
-          : "bg-slate-100 text-slate-700 hover:bg-slate-200"
-        }`}
+      className={`rounded-lg px-3 py-1.5 text-sm transition ${
+        disabled
+          ? "cursor-not-allowed bg-slate-100 text-slate-400"
+          : active
+            ? "bg-slate-900 text-white"
+            : "bg-slate-100 text-slate-700 hover:bg-slate-200"
+      }`}
     >
       {children}
     </button>
@@ -239,80 +318,267 @@ function Leaf({ attributes, children, leaf }) {
     );
   }
 
-  if (leaf.link?.href) {
-    children = (
+  return <span {...attributes}>{children}</span>;
+}
+
+function LinkElement({ attributes, children, element }) {
+  const editor = useSlateStatic();
+  const [isEditingLink, setIsEditingLink] = useState(false);
+  const [url, setUrl] = useState(element.href || "");
+  const [target, setTarget] = useState(element.target || "_self");
+
+  useEffect(() => {
+    setUrl(element.href || "");
+    setTarget(element.target || "_self");
+  }, [element]);
+
+  const saveLink = () => {
+    const href = url.trim();
+    const path = ReactEditor.findPath(editor, element);
+
+    if (!href) {
+      Transforms.unwrapNodes(editor, { at: path });
+      setIsEditingLink(false);
+      return;
+    }
+
+    Transforms.setNodes(
+      editor,
+      {
+        href,
+        target,
+      },
+      { at: path }
+    );
+
+    setIsEditingLink(false);
+  };
+
+  const removeLink = () => {
+    const path = ReactEditor.findPath(editor, element);
+    Transforms.unwrapNodes(editor, { at: path });
+    setIsEditingLink(false);
+  };
+
+const cancelEditLink = () => {
+  setUrl(element.href || "");
+  setTarget(element.target || "_self");
+  setIsEditingLink(false);
+};  
+
+  return (
+    <span {...attributes} className="group relative inline">
       <a
-        href={leaf.link.href}
-        target={leaf.link.target || "_self"}
-        rel={leaf.link.target === "_blank" ? "noopener noreferrer" : undefined}
+        href={element.href}
+        target={element.target || "_self"}
+        rel={element.target === "_blank" ? "noopener noreferrer" : undefined}
         className="text-slate-900 underline decoration-slate-300 underline-offset-2"
       >
         {children}
       </a>
-    );
-  }
 
-  return <span {...attributes}>{children}</span>;
+      <span contentEditable={false} className="ml-1 inline-flex align-middle">
+        <button
+          type="button"
+          onMouseDown={(e) => {
+            e.preventDefault();
+            setIsEditingLink((v) => !v);
+          }}
+          className="hidden rounded-md border border-slate-200 bg-white px-1.5 py-0.5 text-[10px] text-slate-600 shadow-sm group-hover:inline-block"
+        >
+          แก้
+        </button>
+      </span>
+
+      {isEditingLink ? (
+        <span
+          contentEditable={false}
+          className="absolute left-0 top-full z-50 mt-2 w-72 rounded-xl border border-slate-200 bg-white p-3 shadow-xl"
+        >
+          <input
+            value={url}
+            onChange={(e) => setUrl(e.target.value)}
+            placeholder="https://example.com"
+            className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900"
+          />
+
+          <select
+            value={target}
+            onChange={(e) => setTarget(e.target.value)}
+            className="mt-2 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900"
+          >
+            <option value="_self">Open in same tab</option>
+            <option value="_blank">Open in new tab</option>
+          </select>
+
+          <div className="mt-3 flex gap-2">
+            <button
+              type="button"
+              onMouseDown={(e) => {
+                e.preventDefault();
+                saveLink();
+              }}
+              className="rounded-lg bg-slate-900 px-3 py-2 text-sm text-white"
+            >
+              Save
+            </button>
+
+            <button
+              type="button"
+              onMouseDown={(e) => {
+                e.preventDefault();
+                removeLink();
+              }}
+              className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700"
+            >
+              Remove
+            </button>
+            <button
+              type="button"
+              onMouseDown={(e) => {
+                e.preventDefault();
+                cancelEditLink();
+              }}
+              className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700"
+            >
+              Cancel
+            </button>            
+          </div>
+        </span>
+      ) : null}
+    </span>
+  );
 }
 
-function ImageElement({ attributes, children, element, onEditLink }) {
+function ImageElement({ attributes, children, element }) {
   const editor = useSlateStatic();
+  const [isEditingLink, setIsEditingLink] = useState(false);
+  const [url, setUrl] = useState(element.link?.href || "");
+  const [target, setTarget] = useState(element.link?.target || "_self");
 
   const removeImage = () => {
+  const path = ReactEditor.findPath(editor, element);
+  Transforms.removeNodes(editor, { at: path });
+};
+
+  useEffect(() => {
+    setUrl(element.link?.href || "");
+    setTarget(element.link?.target || "_self");
+    setIsEditingLink(false);
+  }, [element]);
+
+  const saveLink = () => {
     const path = ReactEditor.findPath(editor, element);
-    Transforms.removeNodes(editor, { at: path });
+
+    Transforms.setNodes(
+      editor,
+      {
+        link: url.trim()
+          ? { href: url.trim(), target }
+          : null,
+      },
+      { at: path }
+    );
+
+    setIsEditingLink(false);
   };
 
-  const imageNode = (
-    <img
-      src={element.src}
-      alt={element.alt || ""}
-      className="max-h-[520px] max-w-full rounded-xl border border-slate-200"
-    />
-  );
+  const cancelEditLink = () => {
+  setUrl(element.link?.href || "");
+  setTarget(element.link?.target || "_self");
+  setIsEditingLink(false);
+};
 
   return (
-    <div {...attributes} className="group relative my-4">
-      <div contentEditable={false} className="relative inline-block max-w-full">
-        {element.link?.href ? (
-          <a
-            href={element.link.href}
-            target={element.link.target || "_self"}
-            rel={element.link.target === "_blank" ? "noopener noreferrer" : undefined}
-            className="inline-block"
-          >
-            {imageNode}
-          </a>
-        ) : (
-          imageNode
-        )}
+    <div {...attributes} className="group relative my-6">
+      <div contentEditable={false} className="relative">
+        <img
+          src={element.src}
+          alt={element.alt || ""}
+          className="rounded-2xl border border-slate-200"
+        />
 
-        <div className="absolute right-2 top-2 flex gap-2">
+        <div className="absolute right-3 top-3 flex gap-2 opacity-0 transition group-hover:opacity-100">
           <button
             type="button"
-            onMouseDown={(event) => {
-              event.preventDefault();
-              onEditLink(element);
+            onMouseDown={(e) => {
+              e.preventDefault();
+              setIsEditingLink((v) => !v);
             }}
-            className="rounded-lg bg-black/70 px-2 py-1 text-xs font-medium text-white"
-            aria-label="Set image link"
+            className="rounded-lg bg-white/95 px-3 py-1.5 text-xs shadow"
           >
-            ลิงก์
+            แก้ลิงก์
           </button>
-
           <button
             type="button"
-            onMouseDown={(event) => {
-              event.preventDefault();
+            onMouseDown={(e) => {
+              e.preventDefault();
               removeImage();
             }}
-            className="rounded-lg bg-black/70 px-2 py-1 text-xs font-medium text-white"
-            aria-label="Remove image"
+            className="rounded-lg bg-white/95 px-3 py-1.5 text-xs shadow text-red-600"
           >
-            ลบ
-          </button>
+            ลบรูป
+          </button>          
         </div>
+
+        {isEditingLink ? (
+          <div className="absolute inset-x-3 top-3 z-50 rounded-xl border border-slate-200 bg-white p-3 shadow-xl">
+            <input
+              value={url}
+              onChange={(e) => setUrl(e.target.value)}
+              placeholder="https://example.com"
+              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900"
+            />
+
+            <select
+              value={target}
+              onChange={(e) => setTarget(e.target.value)}
+              className="mt-2 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900"
+            >
+              <option value="_self">Open in same tab</option>
+              <option value="_blank">Open in new tab</option>
+            </select>
+
+            <div className="mt-3 flex gap-2">
+              <button
+                type="button"
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  saveLink();
+                }}
+                className="rounded-lg bg-slate-900 px-3 py-2 text-sm text-white"
+              >
+                Save
+              </button>
+
+              <button
+                type="button"
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  setUrl("");
+                  const path = ReactEditor.findPath(editor, element);
+                  Transforms.setNodes(editor, { link: null }, { at: path });
+                  setIsEditingLink(false);
+                }}
+                className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700"
+              >
+                Remove
+              </button>
+  <button
+    type="button"
+    onMouseDown={(e) => {
+      e.preventDefault();
+      cancelEditLink();
+    }}
+    className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700"
+  >
+    Cancel
+  </button>              
+            </div>
+          </div>
+        ) : null}
       </div>
+
       {children}
     </div>
   );
@@ -380,12 +646,19 @@ function Element({ attributes, children, element, onEditImageLink }) {
         </ImageElement>
       );
 
-    default:
+    case "link":
       return (
-        <p {...attributes} className="mb-3 leading-7 text-slate-700">
+        <LinkElement attributes={attributes} element={element}>
           {children}
-        </p>
+        </LinkElement>
       );
+
+default:
+  return (
+    <div {...attributes} className="mb-3 leading-7 text-slate-700">
+      {children}
+    </div>
+  );
   }
 }
 
@@ -393,7 +666,7 @@ export default function SlateEditor({ value, onChange, stickyTop = "top-4" }) {
   const [editorError, setEditorError] = useState(null);
 
   const editor = useMemo(
-    () => withHistory(withImages(withReact(createEditor()))),
+    () => withHistory(withLayout(withImages(withLinks(withReact(createEditor()))))),
     []
   );
 
@@ -415,16 +688,7 @@ export default function SlateEditor({ value, onChange, stickyTop = "top-4" }) {
     }
 
     setEditorError(null);
-    setSavedSelection(editor.selection);
-
-    const marks = Editor.marks(editor);
-    const currentLink = marks?.link || null;
-
-    setLinkMode("text");
-    setLinkUrl(currentLink?.href || "");
-    setLinkTarget(currentLink?.target || "_self");
-    setActiveImageElement(null);
-    setLinkPanelOpen(true);
+    wrapLink(editor, { href: "https://", target: "_self" });
   }, [editor]);
 
   const openImageLinkPanel = useCallback((element) => {
@@ -459,7 +723,7 @@ export default function SlateEditor({ value, onChange, stickyTop = "top-4" }) {
       if (!savedSelection) return;
 
       Transforms.select(editor, savedSelection);
-      Editor.addMark(editor, "link", {
+      wrapLink(editor, {
         href,
         target: linkTarget,
       });
@@ -497,7 +761,7 @@ export default function SlateEditor({ value, onChange, stickyTop = "top-4" }) {
       if (savedSelection) {
         Transforms.select(editor, savedSelection);
       }
-      Editor.removeMark(editor, "link");
+      unwrapLink(editor);
     }
 
     if (linkMode === "image" && activeImageElement) {
@@ -632,7 +896,7 @@ export default function SlateEditor({ value, onChange, stickyTop = "top-4" }) {
           <ToolbarDivider />
 
           <ToolbarButton
-            active={isLinkMarkActive(editor)}
+            active={isTextLinkActive(editor)}
             onClick={openTextLinkPanel}
           >
             Link
