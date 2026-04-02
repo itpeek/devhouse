@@ -384,9 +384,9 @@ const cancelEditLink = () => {
             e.preventDefault();
             setIsEditingLink((v) => !v);
           }}
-          className="hidden rounded-md border border-slate-200 bg-white px-1.5 py-0.5 text-[10px] text-slate-600 shadow-sm group-hover:inline-block"
+          className="hidden rounded-md border leading-tight border-slate-200 bg-white px-1.5 py-0.5 text-[10px] text-slate-600 shadow-sm group-hover:inline-block"
         >
-          แก้
+          แก้ลิงค์
         </button>
       </span>
 
